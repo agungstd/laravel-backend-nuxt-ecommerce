@@ -154,4 +154,92 @@ class CategoryController extends Controller
         //return failed with Api Resource
         return new CategoryResource(false, 'Data Category Gagal Dihapus!', null);
     }
+
+    /**
+     * Get all categories without pagination.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function getAllCategories()
+    {
+        //get all categories
+        $categories = Category::orderBy('name', 'ASC')->get();
+        
+        //return with Api Resource
+        return new CategoryResource(true, 'All Categories Data', $categories);
+    }
+
+    /**
+     * Toggle category active status.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function toggleActive($id)
+    {
+        $category = Category::find($id);
+        
+        if(!$category) {
+            return new CategoryResource(false, 'Category Tidak Ditemukan!', null);
+        }
+        
+        // Assuming there's an 'is_active' column in categories table
+        $category->is_active = !$category->is_active;
+        $category->save();
+        
+        $status = $category->is_active ? 'diaktifkan' : 'dinonaktifkan';
+        
+        return new CategoryResource(true, "Category berhasil {$status}!", $category);
+    }
+
+    /**
+     * Bulk delete categories.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function bulkDelete(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'ids'     => 'required|array',
+            'ids.*'   => 'exists:categories,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
+        
+        $deletedCount = 0;
+        
+        foreach($request->ids as $id) {
+            $category = Category::find($id);
+            
+            if($category) {
+                //remove image
+                Storage::disk('local')->delete('public/categories/'.basename($category->image));
+                
+                if($category->delete()) {
+                    $deletedCount++;
+                }
+            }
+        }
+        
+        if($deletedCount > 0) {
+            return new CategoryResource(true, "{$deletedCount} Categories Berhasil Dihapus!", null);
+        }
+        
+        return new CategoryResource(false, 'Gagal Menghapus Categories!', null);
+    }
+
+    /**
+     * Count products by category.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function countProducts()
+    {
+        $categoriesWithCount = Category::withCount('products')->get();
+        
+        return new CategoryResource(true, 'Categories With Product Count', $categoriesWithCount);
+    }
 }
